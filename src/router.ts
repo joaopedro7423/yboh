@@ -65,14 +65,11 @@ interface JobArea {
   count: number;
 }
 interface JobAreaResponse {
-  nome: string;
+  tipo: string;
   jobArea: JobArea[];
 }
 
-router.get("/jobArea", async (request: Request, response: Response) => {
-  // const users = await client.users.findMany({});
-  // console.log(users);
-
+router.get("/job-area", async (request: Request, response: Response) => {
   const jobAreas = await client.users.findMany({
     distinct: ["jobArea"],
     select: {
@@ -107,11 +104,37 @@ router.get("/jobArea", async (request: Request, response: Response) => {
     });
   }
   const usersJobAreasCount: JobAreaResponse[] = [
-    { nome: "Ativos", jobArea: userJobsAtivos },
-    { nome: "Deletados", jobArea: userJobsDelete },
+    { tipo: "Ativos", jobArea: userJobsAtivos },
+    { tipo: "Deletados", jobArea: userJobsDelete },
   ];
 
   return response.json(usersJobAreasCount);
+});
+
+interface UserCountResponse {
+  usuarios: string;
+  count: number;
+}
+
+router.get("/user-count", async (request: Request, response: Response) => {
+  const ativos = await client.users.count({
+    where: {
+      deletedAts: "",
+    },
+  });
+
+  const deletados = await client.users.count({
+    where: {
+      deletedAts: { not: "" },
+    },
+  });
+
+  const usersCount: UserCountResponse[] = [
+    { usuarios: "Ativos", count: ativos },
+    { usuarios: "Deletados", count: deletados },
+  ];
+
+  return response.json(usersCount);
 });
 
 export default router;
