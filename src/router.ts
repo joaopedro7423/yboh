@@ -3,6 +3,7 @@ import { Readable } from "stream";
 import multer from "multer";
 import readline from "readline";
 import { client } from "./database/client";
+import nodemailer from "nodemailer";
 
 const multerConfit = multer();
 
@@ -135,6 +136,90 @@ router.get("/user-count", async (request: Request, response: Response) => {
   ];
 
   return response.json(usersCount);
+});
+
+router.get("/mail", async (request: Request, response: Response) => {
+  const jobAreas = await client.users.findMany({
+    distinct: ["jobArea"],
+    select: {
+      jobArea: true,
+    },
+  });
+
+  const userJobsAtivos: JobArea[] = [];
+  const userJobsDelete: JobArea[] = [];
+
+  for await (let job of jobAreas) {
+    const ativos = await client.users.count({
+      where: {
+        deletedAts: "",
+        jobArea: job.jobArea,
+      },
+    });
+    userJobsAtivos.push({
+      name: job.jobArea,
+      count: ativos,
+    });
+
+    const deletados = await client.users.count({
+      where: {
+        deletedAts: { not: "" },
+        jobArea: job.jobArea,
+      },
+    });
+    userJobsDelete.push({
+      name: job.jobArea,
+      count: deletados,
+    });
+  }
+  const usersJobAreasCount: JobAreaResponse[] = [
+    { tipo: "Ativos", jobArea: userJobsAtivos },
+    { tipo: "Deletados", jobArea: userJobsDelete },
+  ];
+
+  const ativos = await client.users.count({
+    where: {
+      deletedAts: "",
+    },
+  });
+
+  const deletados = await client.users.count({
+    where: {
+      deletedAts: { not: "" },
+    },
+  });
+
+  const usersCount: UserCountResponse[] = [
+    { usuarios: "Ativos", count: ativos },
+    { usuarios: "Deletados", count: deletados },
+  ];
+  var transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.EMAIL_USERNAME,
+      pass: process.env.EMAIL_PASSWORD,
+    },
+  });
+
+  const stringUsersJobAreasCount = JSON.stringify(usersJobAreasCount);
+  const stringUsersCount = JSON.stringify(usersCount);
+
+  var mailOptions = {
+    from: process.env.EMAIL_USERNAME,
+    to: process.env.EMAIL_RECEVER,
+    subject: "Relatorios dos usuários",
+    text: `Os resultados são: ${stringUsersJobAreasCount} e ${stringUsersCount}`,
+  };
+
+  await transporter.sendMail(mailOptions, function (error, info) {
+    if (error) {
+      console.log(error);
+    } else {
+      console.log("Email sent: " + info.response);
+    }
+  });
+
+  return response.json("email enviado");
 });
 
 export default router;
