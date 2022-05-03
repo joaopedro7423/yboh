@@ -39,8 +39,8 @@ router.post(
         id: lineSplit[0],
         name: lineSplit[1],
         jobArea: lineSplit[2],
-        createdAts: lineSplit[3] as string,
-        deletedAts: lineSplit[4] as string,
+        createdAts: lineSplit[3],
+        deletedAts: lineSplit[4],
       });
     }
 
@@ -59,5 +59,59 @@ router.post(
     return response.json(users);
   }
 );
+
+interface JobArea {
+  name: string;
+  count: number;
+}
+interface JobAreaResponse {
+  nome: string;
+  jobArea: JobArea[];
+}
+
+router.get("/jobArea", async (request: Request, response: Response) => {
+  // const users = await client.users.findMany({});
+  // console.log(users);
+
+  const jobAreas = await client.users.findMany({
+    distinct: ["jobArea"],
+    select: {
+      jobArea: true,
+    },
+  });
+
+  const userJobsAtivos: JobArea[] = [];
+  const userJobsDelete: JobArea[] = [];
+
+  for await (let job of jobAreas) {
+    const ativos = await client.users.count({
+      where: {
+        deletedAts: "",
+        jobArea: job.jobArea,
+      },
+    });
+    userJobsAtivos.push({
+      name: job.jobArea,
+      count: ativos,
+    });
+
+    const deletados = await client.users.count({
+      where: {
+        deletedAts: { not: "" },
+        jobArea: job.jobArea,
+      },
+    });
+    userJobsDelete.push({
+      name: job.jobArea,
+      count: deletados,
+    });
+  }
+  const usersJobAreasCount: JobAreaResponse[] = [
+    { nome: "Ativos", jobArea: userJobsAtivos },
+    { nome: "Deletados", jobArea: userJobsDelete },
+  ];
+
+  return response.json(usersJobAreasCount);
+});
 
 export default router;
